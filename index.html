@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Job Application Service — Client Questionnaire</title>
+  
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+  <script>
+/* ── Dynamic references ── */
+var refCount = 1;
+function addReference(){
+  refCount++;
+  var c = document.getElementById('extraRefContainer');
+  var id = 'xRef' + refCount;
+  var el = document.createElement('div');
+  el.className = 'ref-entry'; el.id = id;
+  el.innerHTML = '<div class="ref-entry-header"><div class="edu-entry-title"><span class="edu-badge">Ref 0'+refCount+'</span>Reference '+refCount+'</div><button type="button" class="remove-btn" onclick="removeRef(\''+id+'\')">✕ Remove</button></div><div class="grid g2"><div class="field"><label>Full Name</label><input type="text" placeholder="Reference\'s full name"/></div><div class="field"><label>Job Title</label><input type="text" placeholder="e.g. Senior Manager, Director"/></div><div class="field"><label>Company</label><input type="text" placeholder="Current or last known company"/></div><div class="field"><label>Relationship to You</label><input type="text" placeholder="e.g. Former Manager, Colleague, Client"/></div><div class="field"><label>Email</label><input type="email" placeholder="reference@company.com"/></div><div class="field"><label>Phone Number</label><input type="tel" placeholder="+1 (555) 000-0000"/></div></div>';
+  c.appendChild(el);
+  setTimeout(function(){ el.scrollIntoView({behavior:'smooth',block:'center'}); }, 80);
+}
+function removeRef(id){
+  var el = document.getElementById(id);
+  if(el){ el.style.transition='opacity .22s'; el.style.opacity='0'; setTimeout(function(){ el.remove(); },240); }
+}
+
+/* ── Extra refs for export ── */
+function buildExtraRefRows(){
+  var rows = [];
+  document.querySelectorAll('#extraRefContainer .ref-entry').forEach(function(entry, idx){
+    var inputs = entry.querySelectorAll('input');
+    var vals = Array.from(inputs).map(function(i){ return i.value||''; });
+    rows.push(subHead('Reference '+(idx+2)));
+    rows.push(makeTable([
+      dataRow('Full Name',vals[0]),dataRow('Job Title',vals[1]),
+      dataRow('Company',vals[2]),dataRow('Relationship',vals[3]),
+      dataRow('Email',vals[4]),dataRow('Phone',vals[5])
+    ]));
+    rows.push(spacer());
+  });
+  return rows;
+}
+</script>
+  <style>
+/* ════════════════════════════════════════
+   DESIGN TOKENS — VCS DARK AESTHETIC
+════════════════════════════════════════ */
+:root {
+  --void:  #0D1B25;
+  --deep:  #162130;
+  --mid:   #1e2d3d;
+  --c:     #14A2E2;
+  --g:     #0774B7;
+  --r:     #FF2255;
+  --w:     #FFFFFF;
+  --tx:    #B5D6F2;
+  --tx2:   #6B90B0;
+  --bdr:   rgba(20,162,226,.16);
+  --bdr2:  rgba(20,162,226,.35);
+  --sf:    rgba(7,116,183,.14);
+  --ease:  cubic-bezier(.16,1,.3,1);
+  --form-bg:    rgba(11,22,32,.97);
+  --header-bg:  rgba(8,18,28,.98);
+  --section-bg: rgba(15,26,38,.97);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased;}
+
+body{
+  background:var(--void);color:var(--w);
+  font-family:'Arial',sans-serif;font-weight:400;
+  min-height:100vh;overflow-x:hidden;
+  display:flex;flex-direction:column;align-items:center;
+  padding:clamp(52px,7vh,88px) clamp(1rem,4vw,3rem) 72px;
+  position:relative;
+}
+
+/* CSS background — no JS */
+body::before{
+  content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 20%, rgba(20,162,226,.15) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 50% at 85% 80%, rgba(7,116,183,.11) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(7,116,183,.09) 0%, transparent 60%),
+    var(--void);
+}
+/* Perspective grid */
+body::after{
+  content:'';position:fixed;bottom:0;left:0;right:0;
+  height:48%;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(20,162,226,.10) 1px, transparent 1px),
+    linear-gradient(90deg,rgba(20,162,226,.10) 1px, transparent 1px);
+  background-size:60px 60px;
+  transform:perspective(400px) rotateX(60deg) scaleX(1.4);
+  transform-origin:center bottom;
+  mask-image:linear-gradient(to top,rgba(0,0,0,.22),transparent);
+}
+
+::-webkit-scrollbar{width:2px;}
+::-webkit-scrollbar-thumb{background:linear-gradient(var(--c),var(--g));}
+
+/* Progress bar */
+#prog{
+  position:fixed;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,#055A8E,#14A2E2,#0774B7);
+  transform-origin:left;transform:scaleX(0);z-index:9000;
+  box-shadow:0 0 8px var(--c);transition:transform .25s var(--ease);
+  will-change:transform;
+}
+
+/* ════════════════════════════════
+   WRAPPER
+════════════════════════════════ */
+.form-wrapper{
+  position:relative;z-index:2;
+  width:100%;max-width:940px;
+  border:1px solid rgba(20,162,226,.36);
+  background:var(--form-bg);overflow:visible;
+  padding-bottom:1.5rem;
+}
+/* Scanlines */
+.form-wrapper::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(
+    0deg,transparent,transparent 2px,
+    rgba(20,162,226,.014) 2px,rgba(20,162,226,.014) 4px
+  );
+}
+
+/* ════════════════════════════════
+   HEADER
+════════════════════════════════ */
+.form-header{
+  position:relative;z-index:1;
+  padding:clamp(1.8rem,4vw,2.8rem) clamp(1.5rem,5vw,3.5rem);
+  background:linear-gradient(135deg,rgba(8,16,24,.98) 0%,rgba(12,22,34,.94) 100%);
+  border-bottom:1px solid var(--bdr);overflow:hidden;
+}
+.form-header::after{
+  content:'';position:absolute;top:-60px;right:-60px;
+  width:260px;height:260px;border-radius:50%;
+  background:radial-gradient(circle,rgba(20,162,226,.17) 0%,transparent 70%);
+  pointer-events:none;animation:breathe 6s ease-in-out infinite;will-change:transform,opacity;
+}
+@keyframes breathe{0%,100%{transform:scale(1);opacity:.7;}50%{transform:scale(1.15);opacity:1;}}
+
+.header-top{
+  display:flex;align-items:center;
+  justify-content:space-between;gap:1.5rem;position:relative;z-index:1;
+}
+.brand{display:flex;align-items:center;gap:1.2rem;}
+.brand-icon{
+  width:52px;height:52px;flex-shrink:0;
+  border:1px solid rgba(20,162,226,.38);
+  background:rgba(20,162,226,.10);
+  display:flex;align-items:center;justify-content:center;
+}
+.brand-icon svg{width:28px;height:28px;}
+.brand-text h1{
+  font-family:'Arial',sans-serif;font-weight:700;
+  font-size:clamp(.9rem,1.8vw,1.25rem);
+  letter-spacing:.12em;color:var(--w);line-height:1.1;
+}
+.brand-text p{
+  font-family:'Arial',sans-serif;font-size:clamp(.44rem,.6vw,.54rem);
+  letter-spacing:.22em;text-transform:uppercase;color:var(--tx);margin-top:.3rem;
+}
+.header-badge{
+  font-family:'Arial',sans-serif;font-size:.82rem;
+  letter-spacing:.14em;text-transform:uppercase;font-weight:700;
+  color:var(--c);border:1px solid rgba(20,162,226,.38);
+  padding:.42rem 1rem;white-space:nowrap;background:rgba(20,162,226,.11);flex-shrink:0;
+}
+.header-stripe{
+  height:1.5px;margin-top:1.2rem;
+  background:linear-gradient(90deg,#055A8E,#14A2E2,#0774B7);
+  box-shadow:0 0 5px var(--c);
+}
+.header-desc{
+  margin-top:1rem;position:relative;z-index:1;
+  font-size:.88rem;color:var(--tx);line-height:1.6;
+  font-family:'Arial',sans-serif;
+  max-width:600px;
+}
+
+/* ════════════════════════════════
+   TICKER
+════════════════════════════════ */
+.ticker-wrap{
+  overflow:hidden;border-top:1px solid var(--bdr2);border-bottom:1px solid var(--bdr2);
+  padding:.55rem 0;position:relative;
+}
+.ticker-wrap::before,.ticker-wrap::after{
+  content:'';position:absolute;top:0;bottom:0;width:80px;z-index:2;pointer-events:none;
+}
+.ticker-wrap::before{left:0;background:linear-gradient(90deg,rgba(8,18,28,.98),transparent);}
+.ticker-wrap::after{right:0;background:linear-gradient(-90deg,rgba(8,18,28,.98),transparent);}
+.ticker-track{
+  display:flex;gap:2rem;white-space:nowrap;
+  animation:ticker 22s linear infinite;width:max-content;will-change:transform;
+}
+.ticker-item{
+  font-family:'Arial',sans-serif;font-weight:700;
+  font-size:.75rem;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--w);display:flex;align-items:center;gap:2rem;flex-shrink:0;
+}
+.td{color:var(--c);font-size:.48rem;font-weight:700;}
+@keyframes ticker{0%{transform:translateX(0);}100%{transform:translateX(-50%);}}
+
+/* ════════════════════════════════
+   FORM BODY
+════════════════════════════════ */
+form{
+  position:relative;z-index:1;
+  padding:clamp(1.8rem,4vw,3rem) clamp(1.5rem,5vw,3.5rem) clamp(2rem,4vw,3rem);
+}
+
+/* ── Section block ── */
+.section-block{margin-top:clamp(2.2rem,4.5vw,3rem);}
+.section-block:first-child{margin-top:0;}
+
+.sec-eye{
+  font-family:'Arial',sans-serif;font-size:.82rem;
+  letter-spacing:.22em;text-transform:uppercase;font-weight:700;
+  color:var(--c);display:flex;align-items:center;gap:.7rem;margin-bottom:.8rem;
+}
+.sec-eye::before{content:'';width:16px;height:1px;background:var(--c);opacity:.7;flex-shrink:0;}
+
+.sec-head{
+  font-family:'Arial',sans-serif;font-weight:700;
+  font-size:clamp(1.05rem,2.4vw,1.5rem);
+  letter-spacing:-.02em;color:var(--w);margin-bottom:1.4rem;line-height:1;
+}
+.sec-head .cy{color:var(--c);}
+
+/* divider inside section */
+.sec-divider{height:1px;background:var(--bdr);margin:1.4rem 0;}
+
+/* ── Grid ── */
+.grid{display:grid;gap:14px;}
+.g2{grid-template-columns:1fr 1fr;}
+.g3{grid-template-columns:1fr 1fr 1fr;}
+.span2{grid-column:span 2;}
+.span3{grid-column:span 3;}
+
+/* ── Field ── */
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label{
+  font-family:'Arial',sans-serif;font-size:.78rem;
+  letter-spacing:.14em;text-transform:uppercase;font-weight:500;
+  color:var(--tx);transition:color .18s;
+}
+.field label .req{color:var(--r);}
+
+.field input,.field select,.field textarea{
+  background:var(--sf);border:1px solid var(--bdr);
+  padding:.7rem .95rem;font-size:.875rem;
+  font-family:'Arial',sans-serif;font-weight:500;
+  color:var(--w);outline:none;width:100%;
+  transition:border-color .18s,background .18s,box-shadow .18s;
+  -webkit-appearance:none;appearance:none;
+}
+.field input::placeholder,.field textarea::placeholder{color:var(--tx2);font-size:.8rem;}
+.field input:focus,.field select:focus,.field textarea:focus{
+  border-color:rgba(20,162,226,.58);
+  background:rgba(20,162,226,.08);
+  box-shadow:0 0 0 1px rgba(20,162,226,.22),inset 0 0 16px rgba(20,162,226,.06);
+}
+.field:focus-within label{color:var(--c);}
+.field textarea{resize:vertical;min-height:88px;line-height:1.75;}
+
+/* select arrow */
+.field select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2314A2E2' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 1rem center;
+  padding-right:2.5rem;color-scheme:dark;
+}
+.field select option{background:var(--deep);color:var(--w);}
+
+/* note */
+.field-note{font-size:.72rem;color:var(--tx2);margin-top:3px;font-family:'Arial',sans-serif;letter-spacing:.05em;}
+
+/* ── Radio button group (pill style) ── */
+.rbg{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
+.rbg input[type="radio"]{display:none;}
+.rbg label{
+  font-family:'Arial',sans-serif;font-size:.74rem;
+  letter-spacing:.12em;text-transform:uppercase;
+  padding:.45rem 1rem;
+  border:1px solid var(--bdr);background:var(--sf);
+  color:var(--tx);cursor:pointer;
+  transition:all .18s var(--ease);white-space:nowrap;
+}
+.rbg input[type="radio"]:checked + label{
+  background:rgba(20,162,226,.22);
+  border-color:rgba(20,162,226,.65);color:var(--c);
+  box-shadow:0 0 8px rgba(20,162,226,.18);
+}
+.rbg label:hover{border-color:rgba(20,162,226,.38);color:var(--w);}
+
+/* ── Checkbox group ── */
+.cbg{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
+.cbg input[type="checkbox"]{display:none;}
+.cbg label{
+  font-family:'Arial',sans-serif;font-size:.74rem;
+  letter-spacing:.12em;text-transform:uppercase;
+  padding:.45rem 1rem;
+  border:1px solid var(--bdr);background:var(--sf);
+  color:var(--tx);cursor:pointer;
+  transition:all .18s var(--ease);
+}
+.cbg input[type="checkbox"]:checked + label{
+  background:rgba(20,162,226,.22);
+  border-color:rgba(20,162,226,.65);color:var(--c);
+}
+.cbg label:hover{border-color:rgba(20,162,226,.38);color:var(--w);}
+
+/* "Other" reveal field */
+/* other-reveal handled inline */
+
+/* ── Sub block (for marketing) ── */
+.sub-block{
+  background:rgba(20,162,226,.04);
+  border:1px solid var(--bdr);
+  padding:1rem 1.2rem;margin-bottom:.9rem;
+}
+.sub-block-title{
+  font-family:'Arial',sans-serif;font-size:.7rem;
+  font-weight:700;color:var(--c);text-transform:uppercase;
+  letter-spacing:.18em;margin-bottom:.9rem;
+  display:flex;align-items:center;gap:.6rem;
+}
+.sub-block-title .sb-num{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;background:var(--c);color:var(--void);
+  font-size:.65rem;font-weight:700;flex-shrink:0;
+}
+
+/* ── Education entry ── */
+.edu-entry{
+  background:rgba(20,162,226,.04);
+  border:1px solid var(--bdr);
+  padding:1.2rem 1.4rem;margin-bottom:.9rem;
+}
+.edu-entry-header{
+  display:flex;align-items:center;
+  justify-content:space-between;margin-bottom:1rem;
+}
+.edu-entry-title{
+  display:flex;align-items:center;gap:.7rem;
+  font-family:'Arial',sans-serif;font-weight:700;
+  font-size:.95rem;color:var(--w);
+}
+.edu-badge{
+  font-family:'Arial',sans-serif;font-size:.65rem;
+  font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--c);border:1px solid rgba(20,162,226,.4);
+  padding:.25rem .65rem;background:rgba(20,162,226,.12);
+}
+.remove-btn{
+  font-family:'Arial',sans-serif;font-size:.68rem;
+  letter-spacing:.1em;text-transform:uppercase;
+  background:rgba(255,34,85,.12);color:var(--r);
+  border:1px solid rgba(255,34,85,.3);
+  padding:.35rem .8rem;cursor:pointer;
+  transition:all .18s;
+}
+.remove-btn:hover{background:rgba(255,34,85,.22);border-color:rgba(255,34,85,.6);}
+
+/* Add education button */
+.add-edu-btn{
+  display:flex;align-items:center;justify-content:center;gap:.7rem;
+  width:100%;padding:.9rem;margin-top:.4rem;
+  background:transparent;color:var(--c);
+  border:1px dashed rgba(20,162,226,.4);
+  font-family:'Arial',sans-serif;font-size:.78rem;
+  letter-spacing:.15em;text-transform:uppercase;font-weight:500;
+  cursor:pointer;transition:all .18s;
+}
+.add-edu-btn:hover{background:rgba(20,162,226,.07);border-color:rgba(20,162,226,.65);}
+
+/* DOB row */
+.dob-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+/* Location reveal */
+#locationPreferenceWrap{display:none;}
+
+/* ════════════════════════════════
+   FOOTER ACTIONS
+════════════════════════════════ */
+.footer-actions{
+  display:flex;justify-content:space-between;align-items:center;
+  gap:1rem;margin-top:2.2rem;flex-wrap:wrap;
+  padding-top:1.8rem;
+  border-top:1px solid var(--bdr);
+}
+.footer-label{
+  font-family:'Arial',sans-serif;font-size:.7rem;
+  letter-spacing:.2em;text-transform:uppercase;
+  color:var(--tx2);
+}
+.footer-label span{color:var(--c);}
+.footer-btns{display:flex;gap:.65rem;flex-wrap:wrap;}
+
+.btn{
+  font-family:'Arial',sans-serif;font-size:.75rem;
+  letter-spacing:.14em;text-transform:uppercase;font-weight:700;
+  padding:.65rem 1.4rem;cursor:pointer;
+  transition:all .18s var(--ease);
+  display:inline-flex;align-items:center;gap:.5rem;
+}
+.btn-primary{
+  background:var(--c);color:var(--void);border:1px solid var(--c);
+}
+.btn-primary:hover{background:#3ab8e8;border-color:#3ab8e8;}
+.btn-ghost{
+  background:transparent;color:var(--c);
+  border:1px solid rgba(20,162,226,.45);
+}
+.btn-ghost:hover{background:rgba(20,162,226,.1);border-color:rgba(20,162,226,.7);}
+
+/* ════════════════════════════════
+   RESPONSIVE
+════════════════════════════════ */
+@media(max-width:720px){
+  body{padding:40px 1rem 60px;}
+  .form-header{padding:1.5rem;}
+  form{padding:1.5rem;}
+  .g2,.g3{grid-template-columns:1fr;}
+  .span2,.span3{grid-column:span 1;}
+  .dob-row{grid-template-columns:1fr 1fr;}
+  .header-badge{display:none;}
+}
+@media(max-width:480px){
+  .header-top{flex-direction:column;align-items:flex-start;}
+}
+
+/* Print */
+@media print{
+  body{background:#fff;color:#111;padding:0;}
+  body::before,body::after,#prog,.ticker-wrap{display:none!important;}
+  .form-wrapper{border:none;background:#fff;}
+  .form-header{background:#0f766e!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .footer-actions{display:none;}
+  .field input,.field select,.field textarea{border:1px solid #ccc;background:#fff;color:#111;}
+}
+
+.ref-entry{
+  background:rgba(20,162,226,.04);
+  border:1px solid var(--bdr);
+  padding:1.2rem 1.4rem;margin-bottom:.9rem;
+}
+.ref-entry-header{
+  display:flex;align-items:center;
+  justify-content:space-between;margin-bottom:1rem;
+}
+  </style>
+</head>
+<body>
+<div id="prog"></div>
+
+<div class="form-wrapper">
+
+  <!-- ── HEADER ── -->
+  <div class="form-header">
+    <div class="header-top">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Credential Form">
+            <!-- Card outline -->
+            <rect x="2" y="5" width="24" height="18" rx="1.5" stroke="#14A2E2" stroke-width="1.3"/>
+            <!-- Top accent stripe -->
+            <rect x="2" y="5" width="24" height="4" rx="1.5" fill="#14A2E2" opacity=".25"/>
+            <!-- Avatar circle -->
+            <circle cx="8.5" cy="16" r="3" stroke="#14A2E2" stroke-width="1.1"/>
+            <!-- Name line -->
+            <rect x="14" y="13.5" width="9" height="1.5" rx=".75" fill="#14A2E2" opacity=".8"/>
+            <!-- Sub line -->
+            <rect x="14" y="17" width="6" height="1.2" rx=".6" fill="#14A2E2" opacity=".45"/>
+            <!-- Top-right dot badge -->
+            <circle cx="22" cy="7" r="1" fill="#14A2E2" opacity=".7"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>CREDENTIAL FORM</h1>
+          <p>Job Application Service · Client Details</p>
+        </div>
+      </div>
+      <div class="header-badge">Client Questionnaire</div>
+    </div>
+    <div class="header-stripe"></div>
+    <p class="header-desc">All details provided here will be used exclusively for your job applications — please ensure every field is accurate and up to date. Fields marked <span style="color:#FF2255">*</span> are required.</p>
+  </div>
+
+  <!-- ── TICKER ── -->
+  <div class="ticker-wrap">
+    <div class="ticker-track">
+      <span class="ticker-item">JOB APPLICATION SERVICE <span class="td">◈</span> CLIENT QUESTIONNAIRE <span class="td">◈</span> 4 APPLICATIONS INCLUDED <span class="td">◈</span> USA JOB MARKET <span class="td">◈</span> PROFESSIONAL PLACEMENT <span class="td">◈</span> H1B · OPT · GC · USC <span class="td">◈</span></span>
+      <span class="ticker-item">JOB APPLICATION SERVICE <span class="td">◈</span> CLIENT QUESTIONNAIRE <span class="td">◈</span> 4 APPLICATIONS INCLUDED <span class="td">◈</span> USA JOB MARKET <span class="td">◈</span> PROFESSIONAL PLACEMENT <span class="td">◈</span> H1B · OPT · GC · USC <span class="td">◈</span></span>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       FORM
+  ══════════════════════════════════════ -->
+  <form id="mainForm">
+
+    <!-- ───────────────────────────────────
+         SECTION 1 — PERSONAL INFORMATION
+    ─────────────────────────────────────── -->
+    <div class="section-block">
+      <div class="sec-eye">Section 01 / Personal Information</div>
+      <div class="sec-head"><span class="cy">Personal</span> Information</div>
+
+      <div class="grid g2" style="margin-bottom:14px;">
+        <div class="field span2">
+          <label>Full Legal Name (as on government ID) <span class="req">*</span></label>
+          <input id="fullLegalName" type="text" placeholder="Full name exactly as on your passport / government ID"/>
+        </div>
+        <div class="field">
+          <label>Email Address <span class="req">*</span></label>
+          <input id="clientEmail" type="email" placeholder="your@email.com"/>
+        </div>
+        <div class="field">
+          <label>Phone Number (with country code) <span class="req">*</span></label>
+          <input id="clientPhone" type="tel" placeholder="+1 000-000-0000" maxlength="15" oninput="fmtPhone(this)"/>
+        </div>
+        <div class="field">
+          <label>Full Street Address <span class="req">*</span></label>
+          <input id="clientLocation" type="text" placeholder="e.g. 123 Main St, Austin, TX 78701, USA"/>
+        </div>
+        <div class="field">
+          <label>LinkedIn Profile URL <span class="req">*</span></label>
+          <input id="clientLinkedIn" type="url" placeholder="https://linkedin.com/in/yourprofile"/>
+        </div>
+        <div class="field">
+          <label>Gender <span class="req">*</span></label>
+          <select id="gender">
+            <option value="">Select gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Prefer Not to Say">Prefer Not to Say</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Race / Ethnicity <span class="req">*</span></label>
+          <select id="raceEthnicity">
+            <option value="">Select race / ethnicity</option>
+            <option value="Hispanic or Latino">Hispanic or Latino</option>
+            <option value="White (Not Hispanic or Latino)">White (Not Hispanic or Latino)</option>
+            <option value="Black or African American (Not Hispanic or Latino)">Black or African American (Not Hispanic or Latino)</option>
+            <option value="Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)">Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)</option>
+            <option value="Asian (Not Hispanic or Latino)">Asian (Not Hispanic or Latino)</option>
+            <option value="American Indian or Alaska Native (Not Hispanic or Latino)">American Indian or Alaska Native (Not Hispanic or Latino)</option>
+            <option value="Two or More Races (Not Hispanic or Latino)">Two or More Races (Not Hispanic or Latino)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Work Authorization Status in the USA <span class="req">*</span></label>
+        <div class="rbg" id="workAuthGroup">
+          <input type="radio" name="workAuth" id="wa_usc" value="US Citizen" onclick="waSelect(this)"/>
+          <label for="wa_usc" onclick="waSelect(document.getElementById('wa_usc'))">US Citizen</label>
+          <input type="radio" name="workAuth" id="wa_gc" value="Green Card Holder" onclick="waSelect(this)"/>
+          <label for="wa_gc" onclick="waSelect(document.getElementById('wa_gc'))">Green Card Holder</label>
+          <input type="radio" name="workAuth" id="wa_h1b" value="H1B Visa" onclick="waSelect(this)"/>
+          <label for="wa_h1b" onclick="waSelect(document.getElementById('wa_h1b'))">H1B Visa</label>
+          <input type="radio" name="workAuth" id="wa_h4ead" value="H4 EAD" onclick="waSelect(this)"/>
+          <label for="wa_h4ead" onclick="waSelect(document.getElementById('wa_h4ead'))">H4 EAD</label>
+          <input type="radio" name="workAuth" id="wa_f1opt" value="F1 OPT" onclick="waSelect(this)"/>
+          <label for="wa_f1opt" onclick="waSelect(document.getElementById('wa_f1opt'))">F1 OPT</label>
+          <input type="radio" name="workAuth" id="wa_f1cpt" value="F1 CPT" onclick="waSelect(this)"/>
+          <label for="wa_f1cpt" onclick="waSelect(document.getElementById('wa_f1cpt'))">F1 CPT</label>
+          <input type="radio" name="workAuth" id="wa_stemopt" value="F1 STEM OPT" onclick="waSelect(this)"/>
+          <label for="wa_stemopt" onclick="waSelect(document.getElementById('wa_stemopt'))">F1 STEM OPT</label>
+          <input type="radio" name="workAuth" id="wa_daycpt" value="Day 1 CPT" onclick="waSelect(this)"/>
+          <label for="wa_daycpt" onclick="waSelect(document.getElementById('wa_daycpt'))">Day 1 CPT</label>
+          <input type="radio" name="workAuth" id="wa_asylum" value="Asylum" onclick="waSelect(this)"/>
+          <label for="wa_asylum" onclick="waSelect(document.getElementById('wa_asylum'))">Asylum</label>
+          <input type="radio" name="workAuth" id="wa_other" value="Other" onclick="waSelect(this)"/>
+          <label for="wa_other" onclick="waSelect(document.getElementById('wa_other'))">Other</label>
+        </div>
+        <div id="workAuthOtherWrap" style="display:none;margin-top:10px;">
+          <div class="field" style="margin:0;">
+            <label>Please specify your work authorization <span class="req">*</span></label>
+            <input id="workAuthOther" type="text" placeholder="e.g. TN Visa, E-3 Visa, L-1, J-1, etc."/>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-top:14px;">
+        <div class="field">
+          <label>Date of Birth <span class="req">*</span></label>
+          <input id="dobDate" type="date" style="color:var(--tx);background:var(--inp);border:1px solid var(--bdr);padding:.55rem .75rem;font-family:'Arial',sans-serif;font-size:.82rem;width:100%;box-sizing:border-box;" />
+        </div>
+        <div class="field">
+          <label>Last 4-digit SSN <span class="req">*</span></label>
+          <input id="ssn" type="text" placeholder="Last 4 digits only" maxlength="4"/>
+        </div>
+        <div class="field">
+          <label>Availability for Interviews <span class="req">*</span></label>
+          <input id="vendor" type="text" placeholder="Days &amp; time slots — e.g. Mon–Fri 9am–5pm"/>
+        </div>
+        <div class="field">
+          <label>Preferred Timezone <span class="req">*</span></label>
+          <select id="timezone">
+            <option value="">Select timezone</option>
+            <option value="EST">EST — Eastern Standard Time</option>
+            <option value="CST">CST — Central Standard Time</option>
+            <option value="MST">MST — Mountain Standard Time</option>
+            <option value="PST">PST — Pacific Standard Time</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- ───────────────────────────────────
+         SECTION 2 — JOB PREFERENCES
+    ─────────────────────────────────────── -->
+    <div class="section-block">
+      <div class="sec-eye">Section 02 / Job Preferences</div>
+      <div class="sec-head"><span class="cy">Job</span> Preferences</div>
+
+      <div class="grid g2" style="margin-bottom:14px;">
+        <div class="field span2">
+          <label>Desired Job Title(s) <span class="req">*</span></label>
+          <input id="desiredTitles" type="text" placeholder="e.g. Senior Software Engineer, Tech Lead, Business Analyst"/>
+        </div>
+        <div class="field">
+          <label>Preferred Industry / Field <span class="req">*</span></label>
+          <input id="preferredIndustry" type="text" placeholder="e.g. FinTech, Healthcare IT, E-commerce"/>
+        </div>
+        <div class="field">
+          <label>Preferred Work Location(s) / State(s) <span class="req">*</span></label>
+          <input id="preferredLocations" type="text" placeholder="e.g. New York, Texas, Remote — any state"/>
+        </div>
+      </div>
+
+      <div class="grid g2" style="margin-bottom:14px;">
+        <div class="field">
+          <label>Remote / Hybrid / On-site Preference <span class="req">*</span></label>
+          <div class="rbg">
+            <input type="radio" name="workMode" id="wm_remote" value="Remote Only"/>
+            <label for="wm_remote">Remote Only</label>
+            <input type="radio" name="workMode" id="wm_hybrid" value="Hybrid"/>
+            <label for="wm_hybrid">Hybrid</label>
+            <input type="radio" name="workMode" id="wm_onsite" value="On-site"/>
+            <label for="wm_onsite">On-site</label>
+            <input type="radio" name="workMode" id="wm_open" value="Open to All"/>
+            <label for="wm_open">Open to All</label>
+          </div>
+          <div class="field-note" style="margin-top:6px;color:var(--c);font-size:.72rem;">💡 If you are open to relocation, you will receive a higher number of screening calls, as we can submit your profile for opportunities across the United States.</div>
+        </div>
+
+      </div>
+
+      <div class="grid g2" style="margin-bottom:14px;">
+        <div class="field span2">
+          <label>Expected Salary Range (USD / year) <span class="req">*</span></label>
+          <input id="expectedSalary" type="text" placeholder="e.g. $110,000 – $130,000 / year" oninput="fmtSalary(this)"/>
+          <div class="field-note" style="margin-top:6px;color:var(--c);font-size:.72rem;">💡 Compensation varies based on location, role, and years of experience.</div>
+        </div>
+
+
+      </div>
+    </div>
+
+    <!-- ───────────────────────────────────
+         SECTION 3 — EXPERIENCE & QUALIFICATIONS
+    ─────────────────────────────────────── -->
+    <div class="section-block">
+      <div class="sec-eye">Section 03 / Experience &amp; Qualifications</div>
+      <div class="sec-head"><span class="cy">Experience</span> &amp; Qualifications</div>
+
+      <div class="grid g2" style="margin-bottom:14px;">
+        <div class="field">
+          <label>Years of Total Work Experience <span class="req">*</span></label>
+          <input id="yearsExp" type="text" placeholder="e.g. 7 years"/>
+        </div>
+        <div class="field">
+          <label>Highest Level of Education <span class="req">*</span></label>
+          <div class="rbg">
+            <input type="radio" name="eduLevel" id="el_hs" value="High School"/>
+            <label for="el_hs">High School</label>
+            <input type="radio" name="eduLevel" id="el_as" value="Associate's Degree"/>
+            <label for="el_as">Associate's</label>
+            <input type="radio" name="eduLevel" id="el_bs" value="Bachelor's Degree"/>
+            <label for="el_bs">Bachelor's</label>
+            <input type="radio" name="eduLevel" id="el_ms" value="Master's Degree"/>
+            <label for="el_ms">Master's</label>
+            <input type="radio" name="eduLevel" id="el_phd" value="PhD / Doctorate"/>
+            <label for="el_phd">PhD / Doctorate</label>
+          </div>
+        </div>
+        <div class="field span2">
+          <label>Primary Skills / Technologies (list top 5–10) <span class="req">*</span></label>
+          <textarea id="primarySkills" placeholder="e.g. JavaScript, React, Node.js, Python, SQL, AWS, Agile / Scrum, JIRA, CI/CD, REST APIs"></textarea>
+        </div>
+        <div class="field">
+          <label>Certifications <span class="req">*</span></label>
+          <textarea id="certifications" style="min-height:72px;" placeholder="e.g. AWS Certified Solutions Architect, PMP, Scrum Master (CSM)"></textarea>
+        </div>
+
+      </div>
+
+    </div>
+
+        <!-- ───────────────────────────────────
+         SECTION 7 — EDUCATION
+    ─────────────────────────────────────── -->
+    <div class="section-block">
+      <div class="sec-eye">Section 04 / Education Details</div>
+      <div class="sec-head"><span class="cy">Education</span> Details</div>
+
+      <!-- Bachelor's -->
+      <div class="edu-entry">
+        <div class="edu-entry-header">
+          <div class="edu-entry-title">
+            <span class="edu-badge">Bachelor's</span>Bachelor's Degree
+          </div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Field / Major <span class="req">*</span></label><input id="bachMajor" type="text" placeholder="e.g. Computer Science, Information Technology"/></div>
+          <div class="field"><label>University with Location &amp; ZIP <span class="req">*</span></label><input id="bachUniv" type="text" placeholder="University, City, State, ZIP"/></div>
+          <div class="field"><label>Start Date <span class="req">*</span></label><input id="bachStart" type="text" placeholder="MM-DD-YYYY"/></div>
+          <div class="field"><label>End Date <span class="req">*</span></label><input id="bachEnd" type="text" placeholder="MM-DD-YYYY"/></div>
+          <div class="field"><label>GPA</label><input id="bachGpa" type="text" placeholder="e.g. 3.8 / 4.0"/></div>
+        </div>
+      </div>
+
+      <!-- Master's -->
+      <div class="edu-entry">
+        <div class="edu-entry-header">
+          <div class="edu-entry-title">
+            <span class="edu-badge">Master's</span>Master's Degree
+          </div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Field / Major</label><input id="mastMajor" type="text" placeholder="e.g. Computer Science, Data Science, MBA"/></div>
+          <div class="field"><label>University with Location &amp; ZIP</label><input id="mastUniv" type="text" placeholder="University, City, State, ZIP"/></div>
+          <div class="field"><label>Start Date</label><input id="mastStart" type="text" placeholder="MM-DD-YYYY"/></div>
+          <div class="field"><label>End Date</label><input id="mastEnd" type="text" placeholder="MM-DD-YYYY"/></div>
+          <div class="field"><label>GPA</label><input id="mastGpa" type="text" placeholder="e.g. 3.9 / 4.0"/></div>
+        </div>
+      </div>
+
+      <div id="extraEduContainer"></div>
+
+      <button type="button" class="add-edu-btn" onclick="addEducation()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/></svg>
+        Add More Education
+      </button>
+    </div>
+
+
+
+
+        <!-- ───────────────────────────────────
+         SECTION 5 — MARKETING DETAILS
+    ─────────────────────────────────────── -->
+    <div class="section-block">
+      <div class="sec-eye">Section 05 / Marketing Details</div>
+      <div class="sec-head"><span class="cy">Marketing</span> Details</div>
+
+      <div class="sub-block">
+        <div class="sub-block-title"><span class="sb-num">1</span>Phone for Marketing</div>
+        <div class="grid g2">
+          <div class="field span2">
+            <label>Number for Marketing <span class="req">*</span></label>
+            <input id="mktPhone" type="tel" placeholder="Phone number used for job submissions"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-block">
+        <div class="sub-block-title"><span class="sb-num">2</span>Email for Marketing</div>
+        <div class="grid g2">
+          <div class="field">
+            <label>Email ID <span class="req">*</span></label>
+            <input id="emailId" type="email" placeholder="Marketing email address"/>
+          </div>
+          <div class="field">
+            <label>Email Access Notes</label>
+            <input id="emailAccess" type="text" placeholder="Invite/delegate access steps; do not enter passwords"/>
+          </div>
+        </div>
+      </div>
+
+      <div class="sub-block">
+        <div class="sub-block-title"><span class="sb-num">3</span>LinkedIn for Marketing</div>
+        <div class="grid g2">
+          <div class="field">
+            <label>LinkedIn Login ID <span class="req">*</span></label>
+            <input id="liId" type="email" placeholder="LinkedIn registered email / login ID"/>
+          </div>
+          <div class="field">
+            <label>LinkedIn Access Notes</label>
+            <input id="liAccess" type="text" placeholder="Invite/delegate access steps; do not enter passwords"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+
+        <!-- SECTION 8 — PROFESSIONAL REFERENCES -->
+    <div class="section-block">
+      <div class="sec-eye">Section 06 / Professional References</div>
+      <div class="sec-head"><span class="cy">Professional</span> References</div>
+
+      <!-- Ref 1 (default, not mandatory) -->
+      <div class="ref-entry" id="refEntry1">
+        <div class="ref-entry-header">
+          <div class="edu-entry-title"><span class="edu-badge">Ref 01</span>Reference 1</div>
+        </div>
+        <div class="grid g2">
+          <div class="field"><label>Full Name</label><input id="ref1Name" type="text" placeholder="Reference's full name"/></div>
+          <div class="field"><label>Job Title</label><input id="ref1Title" type="text" placeholder="e.g. Senior Manager, Director of Engineering"/></div>
+          <div class="field"><label>Company</label><input id="ref1Company" type="text" placeholder="Current or last known company"/></div>
+          <div class="field"><label>Relationship to You</label><input id="ref1Rel" type="text" placeholder="e.g. Former Manager, Colleague, Client"/></div>
+          <div class="field"><label>Email</label><input id="ref1Email" type="email" placeholder="reference@company.com"/></div>
+          <div class="field"><label>Phone Number</label><input id="ref1Phone" type="tel" placeholder="+1 (555) 000-0000"/></div>
+        </div>
+      </div>
+
+      <div id="extraRefContainer"></div>
+
+      <button type="button" class="add-edu-btn" onclick="addReference()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"/></svg>
+        Add Professional Reference
+      </button>
+    </div>
+
+
+    <!-- ───────────────────────────────────
+         SECTION 7 — ADDITIONAL NOTES
+    ─────────────────────────────────────── -->
+    <div class="section-block">
+      <div class="sec-eye">Section 07 / Additional Notes</div>
+      <div class="sec-head"><span class="cy">Additional</span> Notes</div>
+
+      <div class="grid" style="margin-bottom:14px;">
+        <div class="field">
+          <label>Anything else we should know?</label>
+          <textarea id="additionalNotes" style="min-height:120px;" placeholder="Any special requirements, constraints, preferred companies to avoid, preferred start date, or other details that may help us find the best match for you..."></textarea>
+        </div>
+        <div class="field">
+          <label>Preferred Start Date / Notice Period</label>
+          <input id="startDate" type="text" placeholder="e.g. Immediate / 2 weeks / 30 days / specific date"/>
+        </div>
+        <div class="field">
+          <label>Companies to Avoid (if any)</label>
+          <input id="avoidCompanies" type="text" placeholder="e.g. Previous employers, competitors, or any companies you prefer not to apply to"/>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── FOOTER ACTIONS ── -->
+    <div class="footer-actions">
+      <div class="footer-label"></div>
+
+      <!-- CTS Notice -->
+      <div style="margin:0 0 1rem 0;padding:1rem 1.2rem;background:rgba(20,162,226,.07);border:1px solid rgba(20,162,226,.3);border-left:4px solid #14A2E2;font-family:'Arial',sans-serif;font-size:.82rem;font-weight:700;color:var(--tx);line-height:1.75;">
+        <span style="display:block;color:#14A2E2;letter-spacing:.1em;text-transform:uppercase;font-size:.68rem;margin-bottom:.5rem;font-weight:800;">&#128203; Support &amp; Feedback</span>
+        For any concerns, updates, feedback, complaints, or suggestions related to our
+        <span style="color:#14A2E2;">Marketing, Sales, Compliance, or Technical</span> teams,
+        please raise a ticket through our <strong>CTS – Company Ticketing System:</strong>
+        <br/><br/>
+        <a href="https://ctssilverspace.vercel.app/login" target="_blank" rel="noopener noreferrer"
+           style="color:#14A2E2;font-weight:800;font-size:.84rem;text-decoration:underline;word-break:break-all;">
+          &#128279; https://ctssilverspace.vercel.app/login
+        </a>
+      </div>
+      <div class="footer-btns">
+        <button type="button" class="btn btn-primary" onclick="exportToWord()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+          Export as Word (.docx)
+        </button>
+      </div>
+    </div>
+
+  </form>
+
+</div><!-- /form-wrapper -->
+
+<script>
+/* ── Progress bar on scroll ── */
+window.addEventListener('scroll',function(){
+  var s=document.documentElement.scrollTop||document.body.scrollTop;
+  var h=document.documentElement.scrollHeight-document.documentElement.clientHeight;
+  document.getElementById('prog').style.transform='scaleX('+(h>0?s/h:0)+')';
+},{passive:true});
+
+/* ── Day dropdown ── */
+/* dobDay script removed — using date picker */
+
+/* ── Work auth "Other" reveal ── */
+function waSelect(radio){
+  radio.checked = true;
+  var wrap = document.getElementById('workAuthOtherWrap');
+  wrap.style.display = (radio.value === 'Other') ? 'block' : 'none';
+  if(radio.value === 'Other'){
+    setTimeout(function(){ document.getElementById('workAuthOther').focus(); }, 50);
+  }
+}
+
+/* ── Relocation toggle ── */
+document.querySelectorAll('input[name="relocation"]').forEach(function(r){
+  r.addEventListener('change',function(){
+    document.getElementById('locationPreferenceWrap').style.display=this.value==='No'?'block':'none';
+  });
+});
+
+/* ── Dynamic education ── */
+var eduCount=0;
+function addEducation(){
+  eduCount++;
+  var c=document.getElementById('extraEduContainer'),id='xEdu'+eduCount,el=document.createElement('div');
+  el.className='edu-entry';el.id=id;
+  el.innerHTML='<div class="edu-entry-header"><div class="edu-entry-title"><span class="edu-badge">Additional</span><span id="'+id+'_lbl">Additional Degree</span></div><button type="button" class="remove-btn" onclick="removeEdu(\''+id+'\')">✕ Remove</button></div><div class="grid g2"><div class="field"><label>Degree Type</label><select onchange="document.getElementById(\''+id+'_lbl\').textContent=this.value||\'Additional Degree\'"><option value="">Select degree type</option><option>Associate\'s Degree</option><option>Diploma / Certificate</option><option>PhD / Doctorate</option><option>Post Graduate Diploma</option><option>Professional Certification</option><option>Other</option></select></div><div class="field"><label>Field / Major</label><input type="text" placeholder="Degree field or specialization"/></div><div class="field"><label>University / Institution with Location &amp; ZIP</label><input type="text" placeholder="Institution, City, State, ZIP"/></div><div class="field"><label>Start Date</label><input type="text" placeholder="MM-DD-YYYY"/></div><div class="field"><label>End Date</label><input type="text" placeholder="MM-DD-YYYY"/></div><div class="field"><label>GPA</label><input type="text" placeholder="e.g. 3.7 / 4.0"/></div></div>';
+  c.appendChild(el);
+  setTimeout(function(){el.scrollIntoView({behavior:'smooth',block:'center'});},80);
+}
+function removeEdu(id){
+  var el=document.getElementById(id);
+  if(el){el.style.transition='opacity .22s';el.style.opacity='0';setTimeout(function(){el.remove();},240);}
+}
+
+/* ══════════════════════════════
+   EXPORT TO WORD (.docx)
+══════════════════════════════ */
+function g(id){var el=document.getElementById(id);return el?(el.value||'').trim():'';}
+function radio(name){var el=document.querySelector('input[name="'+name+'"]:checked');return el?el.value:'';}
+function selText(id){var el=document.getElementById(id);if(!el)return'';var o=el.options[el.selectedIndex];return o?o.text:'';}
+
+function nb(text,bold,bg){
+  var n={style:docx.BorderStyle.NONE,size:0,color:'FFFFFF'};
+  return new docx.TableCell({
+    width:{size:bold?38:62,type:docx.WidthType.PERCENTAGE},
+    borders:{top:n,bottom:n,left:n,right:n},
+    shading:bg?{fill:bg}:undefined,
+    margins:{top:55,bottom:55,left:100,right:60},
+    children:[new docx.Paragraph({children:[new docx.TextRun({text:text||'—',bold:!!bold,size:20,color:bold?'0774B7':'111827'})]})]
+  });
+}
+function dataRow(l,v){return new docx.TableRow({children:[nb(l,true,'EFF7FD'),nb(v,false,null)]});}
+function makeTable(rows){
+  var n={style:docx.BorderStyle.NONE,size:0,color:'FFFFFF'};
+  return new docx.Table({width:{size:100,type:docx.WidthType.PERCENTAGE},borders:{top:n,bottom:n,left:n,right:n,insideH:n,insideV:n},rows:rows});
+}
+function secHead(text){
+  return new docx.Paragraph({children:[new docx.TextRun({text:text,bold:true,size:24,color:'FFFFFF'})],shading:{fill:'0774B7'},spacing:{before:300,after:120},indent:{left:120}});
+}
+function subHead(text){
+  return new docx.Paragraph({children:[new docx.TextRun({text:text,bold:true,size:22,color:'0774B7'})],spacing:{before:200,after:80}});
+}
+function spacer(){return new docx.Paragraph({text:'',spacing:{before:60,after:60}});}
+
+function exportToWord(){
+  /* ── Helpers ── */
+  function g(id){var el=document.getElementById(id);return el?el.value.trim():'';}
+  function sel(id){var el=document.getElementById(id);return el&&el.selectedIndex>=0?el.options[el.selectedIndex].text:'';}
+  function radio(name){var el=document.querySelector('input[name="'+name+'"]:checked');return el?el.value:'';}
+
+  /* ── Gather values ── */
+  var fullLegalName = g('fullLegalName');
+  var clientEmail   = g('clientEmail');
+  var clientPhone   = g('clientPhone');
+  var clientLocation= g('clientLocation');
+  var clientLinkedIn= g('clientLinkedIn');
+  var gender        = sel('gender');
+  var race          = sel('raceEthnicity');
+  var workAuth      = radio('workAuth');
+  if(workAuth==='Other'){ workAuth = 'Other: '+g('workAuthOther'); }
+  var dobRaw        = g('dobDate');
+  var dob           = dobRaw ? new Date(dobRaw+'T00:00:00').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}) : '';
+  var ssn           = g('ssn');
+  var interviewAvail= g('vendor');
+  var timezone      = sel('timezone');
+
+  var desiredTitles     = g('desiredTitles');
+  var preferredIndustry = g('preferredIndustry');
+  var preferredLocations= g('preferredLocations');
+  var workMode          = radio('workMode');
+  var expectedSalary    = g('expectedSalary');
+
+  var yearsExp      = g('yearsExp');
+  var eduLevel      = radio('eduLevel');
+  var primarySkills = g('primarySkills');
+  var certifications= g('certifications');
+
+  var mktPhone = g('mktPhone');
+  var emailId  = g('emailId');
+  var emailAccess= g('emailAccess');
+  var liId     = g('liId');
+  var liAccess = g('liAccess');
+
+  var bachMajor=g('bachMajor'),bachUniv=g('bachUniv'),bachStart=g('bachStart'),bachEnd=g('bachEnd'),bachGpa=g('bachGpa');
+  var mastMajor=g('mastMajor'),mastUniv=g('mastUniv'),mastStart=g('mastStart'),mastEnd=g('mastEnd'),mastGpa=g('mastGpa');
+
+  var addNotes   = g('additionalNotes');
+  var startDate  = g('startDate');
+  var avoidCo    = g('avoidCompanies');
+
+  /* ── docx helpers ── */
+  var PH = '#C0C0C0';
+  var HB = '0A6E75';
+  var AB = '14A2E2';
+
+  function spacer(){
+    return new docx.Paragraph({spacing:{before:60,after:60}});
+  }
+  function secHead(txt){
+    return new docx.Paragraph({
+      children:[new docx.TextRun({text:txt,bold:true,size:22,color:HB,allCaps:true})],
+      spacing:{before:240,after:80},
+      border:{bottom:{style:docx.BorderStyle.SINGLE,size:6,color:AB,space:3}}
+    });
+  }
+  function subHead(txt){
+    return new docx.Paragraph({
+      children:[new docx.TextRun({text:txt,bold:true,size:20,color:HB})],
+      spacing:{before:120,after:40}
+    });
+  }
+  function dataRow(label,value){
+    return new docx.TableRow({children:[
+      new docx.TableCell({
+        width:{size:35,type:docx.WidthType.PERCENTAGE},
+        shading:{fill:'F3F4F6'},
+        margins:{top:60,bottom:60,left:80,right:80},
+        children:[new docx.Paragraph({children:[new docx.TextRun({text:label,bold:true,size:18,color:'374151'})]})]
+      }),
+      new docx.TableCell({
+        width:{size:65,type:docx.WidthType.PERCENTAGE},
+        margins:{top:60,bottom:60,left:80,right:80},
+        children:[new docx.Paragraph({children:[new docx.TextRun({text:value||'—',size:18,color:value?'111827':PH})]})]
+      })
+    ]});
+  }
+  function makeTable(rows){
+    return new docx.Table({
+      width:{size:100,type:docx.WidthType.PERCENTAGE},
+      borders:{top:{style:docx.BorderStyle.SINGLE,size:4,color:'E5E7EB'},
+               bottom:{style:docx.BorderStyle.SINGLE,size:4,color:'E5E7EB'},
+               left:{style:docx.BorderStyle.SINGLE,size:4,color:'E5E7EB'},
+               right:{style:docx.BorderStyle.SINGLE,size:4,color:'E5E7EB'},
+               insideH:{style:docx.BorderStyle.SINGLE,size:2,color:'E5E7EB'},
+               insideV:{style:docx.BorderStyle.SINGLE,size:2,color:'E5E7EB'}},
+      rows:rows
+    });
+  }
+
+  /* ── Extra education ── */
+  var extraEduChildren=[];
+  document.querySelectorAll('#extraEduContainer .edu-entry').forEach(function(entry){
+    var inputs=entry.querySelectorAll('input,select');
+    var degType=inputs[0]?inputs[0].options[inputs[0].selectedIndex].text:'';
+    var field=inputs[1]?inputs[1].value:'';
+    var univ=inputs[2]?inputs[2].value:'';
+    var startD=inputs[3]?inputs[3].value:'';
+    var endD=inputs[4]?inputs[4].value:'';
+    var gpa=inputs[5]?inputs[5].value:'';
+    extraEduChildren.push(subHead(degType||'Additional Degree'));
+    extraEduChildren.push(makeTable([
+      dataRow('Field / Major',field),dataRow('University',univ),
+      dataRow('Start Date',startD),dataRow('End Date',endD),dataRow('GPA',gpa)
+    ]));
+    extraEduChildren.push(spacer());
+  });
+
+  /* ── Extra references ── */
+  var extraRefChildren=[];
+  document.querySelectorAll('.ref-entry:not(#refEntry1)').forEach(function(entry){
+    var n=entry.querySelector('.edu-entry-title')?.textContent||'Reference';
+    extraRefChildren.push(subHead(n));
+    function gf(cl){var el=entry.querySelector(cl);return el?el.value.trim():'';}
+    extraRefChildren.push(makeTable([
+      dataRow('Full Name',gf('input[placeholder="Reference\'s full name"]')),
+      dataRow('Job Title',gf('input[placeholder*="Senior Manager"]')),
+      dataRow('Company',gf('input[placeholder*="last known company"]')),
+      dataRow('Relationship',gf('input[placeholder*="Former Manager"]')),
+      dataRow('Email',gf('input[type="email"]')),
+      dataRow('Phone',gf('input[type="tel"]'))
+    ]));
+    extraRefChildren.push(spacer());
+  });
+
+  /* ── Build document ── */
+  var doc = new docx.Document({
+    styles:{default:{document:{run:{font:'Calibri',size:20,color:'111827'}}}},
+    sections:[{
+      properties:{page:{margin:{top:720,bottom:720,left:900,right:900}}},
+      children:[
+        new docx.Paragraph({
+          children:[new docx.TextRun({text:'Job Application Service — Client Questionnaire',bold:true,size:36,color:HB})],
+          spacing:{before:0,after:180},
+          border:{bottom:{style:docx.BorderStyle.SINGLE,size:8,color:AB,space:4}}
+        }),
+        spacer(),
+
+        secHead('SECTION 1 — PERSONAL INFORMATION'),
+        makeTable([
+          dataRow('Full Legal Name',fullLegalName),
+          dataRow('Email Address',clientEmail),
+          dataRow('Phone (with country code)',clientPhone),
+          dataRow('Full Street Address',clientLocation),
+          dataRow('LinkedIn Profile URL',clientLinkedIn),
+          dataRow('Gender',gender),
+          dataRow('Race / Ethnicity',race),
+          dataRow('Work Authorization Status',workAuth),
+          dataRow('Date of Birth (Month & Day)',dob),
+          dataRow('Last 4-digit SSN',ssn),
+          dataRow('Availability for Interviews',interviewAvail),
+          dataRow('Preferred Timezone',timezone)
+        ]),
+        spacer(),
+
+        secHead('SECTION 2 — JOB PREFERENCES (FOR 4 APPLICATIONS)'),
+        makeTable([
+          dataRow('Desired Job Title(s)',desiredTitles),
+          dataRow('Preferred Industry / Field',preferredIndustry),
+          dataRow('Preferred Work Location(s)',preferredLocations),
+          dataRow('Remote / Hybrid / On-site',workMode),
+          dataRow('Expected Salary Range (USD/yr)',expectedSalary)
+        ]),
+        spacer(),
+
+        secHead('SECTION 3 — EXPERIENCE & QUALIFICATIONS'),
+        makeTable([
+          dataRow('Years of Total Work Experience',yearsExp),
+          dataRow('Highest Level of Education',eduLevel),
+          dataRow('Primary Skills / Technologies',primarySkills),
+          dataRow('Certifications',certifications)
+        ]),
+        spacer(),
+
+        secHead('SECTION 4 — EDUCATION DETAILS'),
+        subHead("Bachelor's Degree"),
+        makeTable([
+          dataRow('Field / Major',bachMajor),dataRow('University',bachUniv),
+          dataRow('Start Date',bachStart),dataRow('End Date',bachEnd),dataRow('GPA',bachGpa)
+        ]),
+        spacer(),
+        subHead("Master's Degree"),
+        makeTable([
+          dataRow('Field / Major',mastMajor),dataRow('University',mastUniv),
+          dataRow('Start Date',mastStart),dataRow('End Date',mastEnd),dataRow('GPA',mastGpa)
+        ]),
+        spacer()
+
+      ].concat(extraEduChildren).concat([
+
+        secHead('SECTION 5 — MARKETING DETAILS'),
+        makeTable([
+          dataRow('Marketing Phone',mktPhone),
+          dataRow('Marketing Email ID',emailId),
+          dataRow('Marketing Email Access Notes',emailAccess),
+          dataRow('LinkedIn Login ID',liId),
+          dataRow('LinkedIn Access Notes',liAccess)
+        ]),
+        spacer(),
+
+        secHead('SECTION 6 — PROFESSIONAL REFERENCES'),
+        subHead('Reference 1'),
+        makeTable([
+          dataRow('Full Name',g('ref1Name')),
+          dataRow('Job Title',g('ref1Title')),
+          dataRow('Company',g('ref1Company')),
+          dataRow('Relationship',g('ref1Rel')),
+          dataRow('Email',g('ref1Email')),
+          dataRow('Phone',g('ref1Phone'))
+        ]),
+        spacer()
+
+      ]).concat(extraRefChildren).concat([
+
+        secHead('SECTION 7 — ADDITIONAL NOTES'),
+        makeTable([
+          dataRow('Preferred Start Date / Notice Period',startDate),
+          dataRow('Companies to Avoid',avoidCo),
+          dataRow('Additional Notes',addNotes)
+        ]),
+        spacer()
+
+      ])
+    }]
+  });
+
+  docx.Packer.toBlob(doc).then(function(blob){
+    var a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='Job_Application_Questionnaire_'+(fullLegalName||'Client').replace(/\s+/g,'_')+'.docx';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  });
+}
+
+
+/* ── Phone mask: +1 xxx-xxx-xxxx ── */
+function fmtPhone(el){
+  var digits = el.value.replace(/\D/g,'').substring(0,11);
+  var out = '';
+  if(digits.length === 0){ el.value=''; return; }
+  // ensure starts with 1
+  if(digits[0] !== '1') digits = '1' + digits;
+  digits = digits.substring(0,11);
+  out = '+1';
+  if(digits.length > 1) out += ' ' + digits.substring(1,4);
+  if(digits.length > 4) out += '-' + digits.substring(4,7);
+  if(digits.length > 7) out += '-' + digits.substring(7,11);
+  el.value = out;
+}
+
+/* ── Salary comma formatter ── */
+function fmtSalary(el){
+  var raw = el.value;
+  // Allow free text with commas — just auto-insert commas into leading number
+  var match = raw.match(/^\$?([\d,]+)/);
+  if(match){
+    var num = match[1].replace(/,/g,'');
+    if(num.length > 0){
+      var formatted = '$' + parseInt(num,10).toLocaleString('en-US');
+      // keep rest of string (e.g. "– $130,000 / year")
+      var rest = raw.substring(match[0].length);
+      el.value = formatted + rest;
+    }
+  }
+}
+
+</script>
+
+</body>
+</html>
